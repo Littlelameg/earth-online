@@ -4,7 +4,7 @@
 
 ## 还缺什么
 
-- 用户的腾讯云 CloudBase 环境 ID 与地域。
+- 已收到环境 ID：`earth-online-d7g6gwyd46a788320`；地域：上海 `ap-shanghai`。前端已填写，`enabled:false` 表示等待控制台配置和云函数部署完成后启用。
 - 在用户已登录的腾讯云控制台或授权 CLI 中操作的能力。目前未找到可用连接或本机 CLI。
 - 可用于收信测试的邮箱与实际多设备/国内运营商网络。
 
@@ -18,7 +18,7 @@
 4. 创建文档数据库集合 `earth_worlds`。把 `cloudfunctions/database.rules.json` 配置到这个集合：客户端读取和写入均拒绝。客户端通过云函数操作；云函数从认证调用上下文取 UID，不信任请求中的 UID。
 5. 部署 `cloudfunctions/earth-world` 为 `earth-world` 云函数，入口 `index.main`，使用平台当前支持且兼容 SDK 的 Node.js 运行时，按该目录 package-lock 安装生产依赖。必须通过 CloudBase SDK 带身份调用，不启用无鉴权公网 HTTP 入口。
 6. 配置云端验证码发送/校验的频率、配额和告警。页面的 60 秒重发等待仅改善体验，不是服务端防刷。实际平台能力须在控制台核对。
-7. 更新 `dist/cloudbase-config.js` 的 `env`、`region`，保留函数名 `earth-world`，再构建并部署前端。
+7. 更新 `dist/cloudbase-config.js` 的 `env`、`region`，保留函数名 `earth-world`，确认云端配置成功后将 `enabled` 设为 `true`，再构建并部署前端。
 8. 先验证两个测试账号无法读取或覆盖彼此记录，再邀请内测。
 
 ## 用户体验
@@ -46,7 +46,7 @@
 
 ## 前端托管边界
 
-当前 Sites 地址仍为用户私有设计预览，有外层访问控制，不能当作面向国内公众的正式入口。CloudBase 认证不能绕过这个外层登录页。正式国内访问测试需要相应前端托管地址；保留当前私有权限，本次不擅自公开。
+按用户要求，Sites 地址现已公开。公开页面不等于国内网络已验证稳定；需要在目标网络测试。CloudBase 的邮箱认证与数据权限仍需独立配置。
 
 ## 证据与版本
 
@@ -60,3 +60,5 @@
 部署工具在 Windows 上的安装/打包子进程曾启动失败；依赖安装改用现有 npm 成功完成。未修改全局设置。
 
 打包兼容性已定位并解决：子进程找不到 Git Bash，以及 tar 把 Windows 盘符误识别为远程主机。仅对该次打包进程补充 Git Bash 路径和 TAR_OPTIONS=--force-local，未修改全局环境。
+
+环境 ID 只标识目标资源，不授予部署权限。Edge 控制台操作上轮因工具无法可靠识别网页地址而终止，不能将已收到 ID 当作已完成腾讯云配置。

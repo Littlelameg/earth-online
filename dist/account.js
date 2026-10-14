@@ -24,7 +24,7 @@
   function escape(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
   function notify(text){window.dispatchEvent(new CustomEvent('earth-notice',{detail:text}));}
   async function ensureCloud(){
-    if(!config?.env)throw Error('NOT_CONFIGURED');
+    if((!config?.env||config.enabled===false))throw Error('NOT_CONFIGURED');
     if(!cloud){
       if(!window.createEarthCloud){await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='vendor/cloudbase.js';script.onload=resolve;script.onerror=()=>{script.remove();reject(Error('SDK_UNAVAILABLE'));};document.head.append(script);});}
       cloud=window.createEarthCloud(config);
@@ -95,7 +95,7 @@
     const a=document.createElement('a');a.href=url;a.download='地球Online-我的世界.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function panel(){
-    if(!config?.env){
+    if((!config?.env||config.enabled===false)){
       show('<h2>先把小世界留在身边。</h2><p>云端保存尚未开通。目前的期待和足迹只保存在此浏览器，换设备暂时看不到。</p><p>可以先导出一份备份，继续安心体验。</p><button class="primary" id="export-world">导出我的世界</button>');
     }else if(session&&account){
       let local;try{local=guest();}catch{local=Core.empty();}
@@ -148,7 +148,7 @@
   }
   window.EarthAccount={save,updateStatus,panel};
   document.querySelector('#account-button').onclick=async()=>{
-    if(config?.env&&!session){try{await ensureCloud();const existing=await cloud.session();if(existing)await activate(existing);}catch(e){notify(errorText(e));}}
+    if(config?.env&&config.enabled!==false&&!session){try{await ensureCloud();const existing=await cloud.session();if(existing)await activate(existing);}catch(e){notify(errorText(e));}}
     panel();
   };
   document.querySelector('#storage-info').onclick=panel;
@@ -159,6 +159,6 @@
     if(account){try{const next=read(cacheKey(account.id),null);if(next){account={...next,world:Core.merge(account.base,account.world,next.world)};emit(account.world);void sync();}}catch{notify('另一页面修改了同一条记录，暂未覆盖。请先导出本机备份。');}}
     else {try{emit(guest());}catch{notify('本机记录暂时无法读取。');}}
   }});
-  if(config?.env){void (async()=>{try{await ensureCloud();const existing=await cloud.session();if(existing)await activate(existing);}catch{setStatus('云端暂未连接 · 本机记录保留');}})();}
+  if(config?.env&&config.enabled!==false){void (async()=>{try{await ensureCloud();const existing=await cloud.session();if(existing)await activate(existing);}catch{setStatus('云端暂未连接 · 本机记录保留');}})();}
   updateStatus();
 })();
