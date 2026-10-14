@@ -1,0 +1,4 @@
+CloudBase JavaScript SDK 3.10.2
+Apache-2.0
+https://github.com/TencentCloudBase/cloudbase-js-sdk
+Bundled dependencies retain license notices in cloudbase.js.
