@@ -39,3 +39,10 @@ test('账号A缓存不迁移给账号B，退出显示游客世界',async()=>{
   const b=fixture({storage,id:'B'});await settle(b,'已同步到云端');assert.equal(b.remote.wishes.length,0);
   b.signout();const last=b.events.filter(e=>e.type==='earth-world-loaded').at(-1);assert.equal(last.detail.wishes[0].id,'guest');
 });
+test('保存前合并另一标签页已写入的记录',async()=>{
+  const f=fixture();await settle(f,'已同步到云端');
+  const key='earth-online-account-v1:A',disk=JSON.parse(f.storage.get(key));
+  disk.world=world('other-tab');f.storage.set(key,JSON.stringify(disk));
+  f.window.EarthAccount.save(world('this-tab'));await settle(f,'已同步到云端');
+  assert.deepEqual(new Set(f.remote.wishes.map(x=>x.id)),new Set(['other-tab','this-tab']));
+});

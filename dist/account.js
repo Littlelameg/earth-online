@@ -82,7 +82,11 @@
   }
   function save(world){
     world=Core.validate(world);
-    if(account){const next={...account,world};write(cacheKey(account.id),next);account=next;setStatus('本机已保存 · 等待同步');void sync();}
+    if(account){
+      const disk=read(cacheKey(account.id),account);
+      const next={...disk,world:Core.merge(account.world,world,disk.world)};
+      write(cacheKey(account.id),next);account=next;emit(next.world);setStatus('本机已保存 · 等待同步');void sync();
+    }
     else {write(guestKey,world);setStatus('记录保存在此浏览器');}
   }
   function exportWorld(){
@@ -152,7 +156,7 @@
   document.addEventListener('visibilitychange',()=>{if(!document.hidden)void sync();});
   // Avoid two tabs silently overwriting the same browser cache.
   window.addEventListener('storage',e=>{if(e.key===(account?cacheKey(account.id):guestKey)){
-    if(account){try{const next=read(cacheKey(account.id),null);if(next){account=next;emit(account.world);}}catch{notify('另一页面更新了记录，请导出备份后刷新。');}}
+    if(account){try{const next=read(cacheKey(account.id),null);if(next){account={...next,world:Core.merge(account.base,account.world,next.world)};emit(account.world);void sync();}}catch{notify('另一页面修改了同一条记录，暂未覆盖。请先导出本机备份。');}}
     else {try{emit(guest());}catch{notify('本机记录暂时无法读取。');}}
   }});
   if(config?.env){void (async()=>{try{await ensureCloud();const existing=await cloud.session();if(existing)await activate(existing);}catch{setStatus('云端暂未连接 · 本机记录保留');}})();}
