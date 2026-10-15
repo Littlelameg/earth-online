@@ -13,8 +13,11 @@ window.createEarthCloud = config => {
     signOut:async()=>{const result=await auth.signOut();if(result.error)throw result.error;},
     watch:callback=>auth.onAuthStateChange(callback),
     world:async data=>{
-      const response=await app.callFunction({name:config.functionName,data});
-      const result=response.result;
+      const response=await app.rdb().rpc('earth_world_sync',{
+        p_action:data.action,p_revision:data.revision??null,p_world:data.world??null
+      });
+      if(response.error)throw response.error;
+      const result=response.data;
       if(!result||!result.ok)throw Error(result?.code||'SYNC_FAILED');
       return result;
     }
