@@ -1,7 +1,15 @@
 (function(root){
   const empty=()=>({wishes:[],memories:[],evening:false});
   const clone=x=>JSON.parse(JSON.stringify(x));
-  const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  // PostgreSQL jsonb may reorder object keys; array order still matters.
+  function equal(a,b){
+    if(a===b)return true;
+    if(!a||!b||typeof a!=='object'||typeof b!=='object')return false;
+    if(Array.isArray(a)!==Array.isArray(b))return false;
+    if(Array.isArray(a))return a.length===b.length&&a.every((value,i)=>equal(value,b[i]));
+    const keys=Object.keys(a);
+    return keys.length===Object.keys(b).length&&keys.every(key=>Object.prototype.hasOwnProperty.call(b,key)&&equal(a[key],b[key]));
+  }
   function validate(world){
     if(!world||typeof world.evening!=='boolean')throw Error('INVALID_WORLD');
     const clean=empty();
