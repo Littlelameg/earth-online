@@ -7,6 +7,7 @@
   const write=(key,value)=>localStorage.setItem(key,JSON.stringify(value));
   const emit=world=>window.dispatchEvent(new CustomEvent('earth-world-loaded',{detail:Core.clone(world)}));
   function guest(){return Core.validate(read(guestKey,Core.empty()));}
+  let guestBase;try{guestBase=guest();}catch{guestBase=Core.empty();}
   function cache(){if(account)write(cacheKey(account.id),account);}
   function updateStatus(){
     document.querySelector('#account-button').textContent=session?'我的账号':'保存我的世界';
@@ -87,11 +88,11 @@
       const next={...disk,world:Core.merge(account.world,world,disk.world)};
       write(cacheKey(account.id),next);account=next;emit(next.world);setStatus('本机已保存 · 等待同步');void sync();
     }
-    else {write(guestKey,world);setStatus('记录保存在此浏览器');}
+    else {const merged=Core.merge(guestBase,world,guest());write(guestKey,merged);guestBase=Core.clone(merged);emit(merged);setStatus('记录保存在此浏览器');}
   }
   function exportWorld(){
     const world=account?account.world:guest();
-    const url=URL.createObjectURL(new Blob([JSON.stringify({format:'earth-online-backup-v1',exportedAt:new Date().toISOString(),world},null,2)],{type:'application/json'}));
+    const url=URL.createObjectURL(new Blob([JSON.stringify({format:'earth-online-backup-v2',exportedAt:new Date().toISOString(),world},null,2)],{type:'application/json'}));
     const a=document.createElement('a');a.href=url;a.download='地球Online-我的世界.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function panel(){
@@ -99,7 +100,7 @@
       show('<h2>先把小世界留在身边。</h2><p>云端保存尚未开通。目前的期待和足迹只保存在此浏览器，换设备暂时看不到。</p><p>可以先导出一份备份，继续安心体验。</p><button class="primary" id="export-world">导出我的世界</button>');
     }else if(session&&account){
       let local;try{local=guest();}catch{local=Core.empty();}
-      const hasGuest=local.wishes.length+local.memories.length>0;
+      const hasGuest=local.wishes.length+local.memories.length+(local.journals||[]).length+(local.tasks||[]).length>0;
       show(`<h2>我的世界，随身带着。</h2><p>${escape(session.user.email||'已登录')}</p><p id="account-status" role="status">${escape(status)}</p>${hasGuest?'<p>此浏览器还有游客阶段的记录，可以合并到当前账号。</p><button class="primary" id="import-guest">合并本机游客记录</button>':''}<div class="modal-actions"><button class="primary" id="retry-sync">同步最新记录</button><button class="text-button" id="export-world">导出备份</button></div><button class="text-button" id="sign-out">退出账号</button><p class="footnote">退出后显示游客世界。未同步的记录仍按账号保留在本机，下次登录同一账号可继续同步。</p>`);
       document.querySelector('#retry-sync').onclick=async e=>{e.target.disabled=true;await sync();panel();};
       if(hasGuest)document.querySelector('#import-guest').onclick=async e=>{
@@ -146,7 +147,7 @@
     };
     document.querySelector('#change-email').onclick=()=>{verifier=null;panel();};
   }
-  window.EarthAccount={save,updateStatus,panel};
+  window.EarthAccount={save,updateStatus,panel,exportWorld,scope:()=>account?.id||'guest',current:()=>Core.clone(account?account.world:guest())};
   document.querySelector('#account-button').onclick=async()=>{
     if(config?.env&&config.enabled!==false&&!session){try{await ensureCloud();const existing=await cloud.session();if(existing)await activate(existing);}catch(e){notify(errorText(e));}}
     panel();
@@ -157,7 +158,7 @@
   // Avoid two tabs silently overwriting the same browser cache.
   window.addEventListener('storage',e=>{if(e.key===(account?cacheKey(account.id):guestKey)){
     if(account){try{const next=read(cacheKey(account.id),null);if(next){account={...next,world:Core.merge(account.base,account.world,next.world)};emit(account.world);void sync();}}catch{notify('另一页面修改了同一条记录，暂未覆盖。请先导出本机备份。');}}
-    else {try{emit(guest());}catch{notify('本机记录暂时无法读取。');}}
+    else {try{guestBase=guest();emit(guestBase);}catch{notify('本机记录暂时无法读取。');}}
   }});
   if(config?.env&&config.enabled!==false){void (async()=>{try{await ensureCloud();const existing=await cloud.session();if(existing)await activate(existing);}catch{setStatus('云端暂未连接 · 本机记录保留');}})();}
   updateStatus();

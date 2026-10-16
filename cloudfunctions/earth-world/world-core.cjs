@@ -28,15 +28,37 @@
       });
     }
     clean.evening=world.evening;
+    for(const kind of ['journals','tasks']){
+      if(world[kind]===undefined)continue;
+      if(!Array.isArray(world[kind])||world[kind].length>2000)throw Error('WORLD_LIMIT');
+      const ids=new Set();
+      clean[kind]=world[kind].map(item=>{
+        if(!item||typeof item.id!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(item.id)||ids.has(item.id))throw Error('INVALID_ID');
+        ids.add(item.id);
+        const fields=kind==='journals'?{text:12000,date:10,updatedAt:30}:{title:80,detail:3000,date:30,status:20,reason:300};
+        const out={id:item.id};
+        for(const [field,max] of Object.entries(fields)){
+          if(typeof item[field]!=='string'||item[field].length>max)throw Error('INVALID_FIELD');
+          out[field]=item[field];
+        }
+        if(kind==='journals'){
+          if(!out.text.trim()||!/^\d{4}-\d{2}-\d{2}$/.test(out.date)||!Number.isFinite(Date.parse(out.updatedAt))||typeof item.allowAI!=='boolean')throw Error('INVALID_JOURNAL');
+          out.allowAI=item.allowAI;
+        }else if(!out.title.trim()||!['saved','trying','done','dismissed'].includes(out.status))throw Error('INVALID_TASK');
+        return out;
+      });
+    }
     if(JSON.stringify(clean).length>350000)throw Error('WORLD_LIMIT');
     return clean;
   }
   function merge(base,local,remote){
     base=validate(base);local=validate(local);remote=validate(remote);
     const result=empty();
-    for(const kind of ['wishes','memories']){
-      const maps=[base,local,remote].map(w=>new Map(w[kind].map(x=>[x.id,x])));
-      const ids=new Set([...local[kind],...remote[kind],...base[kind]].map(x=>x.id));
+    for(const kind of ['wishes','memories','journals','tasks']){
+      if(![base,local,remote].some(w=>w[kind]!==undefined))continue;
+      result[kind]=[];
+      const maps=[base,local,remote].map(w=>new Map((w[kind]||[]).map(x=>[x.id,x])));
+      const ids=new Set([...(local[kind]||[]),...(remote[kind]||[]),...(base[kind]||[])].map(x=>x.id));
       for(const id of ids){
         const [b,l,r]=maps.map(m=>m.get(id));
         if(!equal(l,b)&&!equal(r,b)&&!equal(l,r))throw Error('MERGE_CONFLICT');
@@ -49,7 +71,9 @@
   }
   function importGuest(remote,guest){
     const out=validate(remote);guest=validate(guest);
-    for(const kind of ['wishes','memories']){
+    for(const kind of ['wishes','memories','journals','tasks']){
+      if(guest[kind]===undefined)continue;
+      out[kind] ||= [];
       const existing=new Map(out[kind].map(x=>[x.id,x]));
       for(const item of guest[kind]){
         if(existing.has(item.id)&&!equal(existing.get(item.id),item))throw Error('MERGE_CONFLICT');
