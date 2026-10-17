@@ -1,8 +1,16 @@
 (() => {
-  const core=window.EarthLifeCore;
+  const core=window.EarthLifeCore, client=window.EarthAIClient;
+  const aiKey=()=>`earth-ai-local-v1:${encodeURIComponent(scope())}`;
+  function aiConfig(){try{const stored=JSON.parse(localStorage.getItem(aiKey())||'null');return stored?client.normalize(stored):{...client.defaults};}catch{return {...client.defaults};}}
+  let aiController;
+  function cancelAI(){requestId++;aiController?.abort();}
+
   let scope=()=>window.EarthAccount?.scope()||'guest';
   let activeScope=scope(), editorBase=null, editorId=null, search='', suggestions=[], requestId=0;
   const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
+  const proposalKey=()=>`earth-proposals-v1:${encodeURIComponent(scope())}`;
+  function restoreProposals(){try{const cached=JSON.parse(localStorage.getItem(proposalKey())||'null');suggestions=cached?.length?core.recommendations(cached):[];}catch{suggestions=[];}}
+  function storeProposals(){try{localStorage.setItem(proposalKey(),JSON.stringify(suggestions));return true;}catch{toast('提案暂未能保存在本机，请先收藏想留下的内容。');return false;}}
   const draftKey=()=>`earth-draft-v1:${encodeURIComponent(scope())}`;
   const current=()=>WorldCore.clone(state);
   function commit(next){
@@ -32,12 +40,12 @@
     if(editorId&&!WorldCore.equal(next.journals.find(j=>j.id===editorId),editorBase)){toast('原记录已被修改或移走。请复制当前草稿后重新打开记录。');return;}
     const entry={id:editorId||uid(),text,date:$('#journal-date').value,updatedAt:new Date().toISOString(),allowAI:$('#journal-ai').checked};
     next.journals=[entry,...next.journals.filter(j=>j.id!==entry.id)];
-    if(commit(next)){try{localStorage.removeItem(draftKey());}catch{}restoreDraft();$('#draft-status').textContent='记录已保存';suggestions=[];renderTasks();}
+    if(commit(next)){try{localStorage.removeItem(draftKey());}catch{}restoreDraft();$('#draft-status').textContent='记录已保存';renderTasks();}
   };
   $('#journal-search').oninput=e=>{search=e.target.value;renderRecords();};
   function renderRecords(){
     const entries=(state.journals||[]).filter(j=>j.text.toLowerCase().includes(search.toLowerCase())).slice().sort((a,b)=>b.date.localeCompare(a.date)||b.updatedAt.localeCompare(a.updatedAt));
-    $('#journal-list').innerHTML=entries.length?entries.map(j=>`<article class="entry journal-entry"><div><span class="card-tag">${esc(j.date)} · ${j.allowAI?'可用于 AI 推荐':'仅保存'}</span><p>${esc(j.text)}</p></div><div class="entry-actions"><button data-edit-j="${j.id}">编辑</button><button data-delete-j="${j.id}">移走</button><button data-memory-j="${j.id}">留作岛上回忆</button></div></article>`).join(''):'<div class="empty"><p>这里可以安静地放下几句话。</p></div>';
+    $('#journal-list').innerHTML=entries.length?entries.map(j=>`<article class="entry journal-entry"><div><span class="card-tag">${esc(j.date)} · ${j.allowAI?'可用于 AI 推荐':'仅保存'}</span><p>${esc(j.text)}</p></div><div class="entry-actions"><button data-edit-j="${j.id}">编辑</button><button data-delete-j="${j.id}">移走</button><button data-memory-j="${j.id}">留作生活足迹</button></div></article>`).join(''):'<div class="empty"><p>这里可以安静地放下几句话。</p></div>';
     page.querySelectorAll('[data-edit-j]').forEach(b=>b.onclick=()=>{
       if($('#journal-text').value.trim()){toast('请先保存或清空当前草稿，再编辑另一条。');return;}
       const j=state.journals.find(j=>j.id===b.dataset.editJ);editorId=j.id;editorBase=WorldCore.clone(j);
@@ -45,7 +53,7 @@
     });
     page.querySelectorAll('[data-delete-j]').forEach(b=>b.onclick=()=>{
       const owner=scope();modal('<h2>移走这条记录？</h2><p>之后的推荐不会再使用它。此前已生成的任务和已保存的岛上回忆会保留，可以分别移走。</p><button class="primary" id="delete-journal">确认移走</button>');
-      $('#delete-journal').onclick=()=>{if(scope()!==owner)return;const next=current();next.journals=next.journals.filter(j=>j.id!==b.dataset.deleteJ);if(commit(next)){suggestions=[];renderTasks();$('#modal').close();}};
+      $('#delete-journal').onclick=()=>{if(scope()!==owner)return;const next=current();next.journals=next.journals.filter(j=>j.id!==b.dataset.deleteJ);if(commit(next)){renderTasks();$('#modal').close();}};
     });
     page.querySelectorAll('[data-memory-j]').forEach(b=>b.onclick=()=>{const j=state.journals.find(j=>j.id===b.dataset.memoryJ);memoryForm(j.text.split('\n')[0].slice(0,80));});
   }
@@ -63,34 +71,43 @@
     };
   };
   const ai=document.createElement('section');ai.className='association-ai';
-  ai.innerHTML='<div class="section-title"><h2>此刻，想做点什么？</h2><button class="text-button" id="ai-settings">AI 连接</button></div><label class="sr-only" for="club-intent">告诉协会你现在的想法</label><textarea id="club-intent" rows="2" maxlength="500" placeholder="只有十分钟，想出门，但不想花钱……"></textarea><p class="footnote" id="ai-disclosure"></p><button class="primary" id="generate-tasks">找一些生活可能</button><p id="ai-status" role="status"></p><div id="ai-suggestions" class="cards"></div><div id="saved-tasks"></div>';
+  ai.innerHTML='<div class="section-title"><h2>此刻，想做点什么？</h2><button class="text-button" id="ai-settings">AI 连接</button></div><label class="sr-only" for="club-intent">告诉协会你现在的想法</label><textarea id="club-intent" rows="2" maxlength="500" placeholder="只有十分钟，想出门，但不想花钱……"></textarea><p class="footnote" id="ai-disclosure"></p><button class="primary" id="generate-tasks">更新生活提案</button><p id="ai-status" role="status"></p><p class="footnote">这里保留上次的提案。只有你主动更新时，才会调用 AI；略过不代表永久不喜欢。</p><div id="ai-suggestions" class="cards"></div><div id="saved-tasks"></div>';
   $('#club').insertBefore(ai,$('#filters'));
   function renderTasks(){
-    const config=window.EARTH_AI||{}, count=core.context(state,'').journals.length;
-    $('#ai-disclosure').textContent=config.endpoint&&config.provider?`点击生成会向 ${config.provider}（${config.model||'已配置模型'}）发送上面的想法，以及最近 30 天内允许使用的最多 6 条记录（当前 ${count} 条，每条最多 1500 字）。`:'AI 服务尚未配置。精选提案仍可浏览；你的记录不会因此发送给外部服务。';
-    $('#ai-suggestions').innerHTML=suggestions.map((p,i)=>`<article class="card"><div class="card-body"><span class="card-tag">AI 生活提案 · 可自由调整</span><h3>${esc(p.title)}</h3><p>${esc(p.reason)}</p><p class="task-detail">${esc(p.detail)}</p><div class="modal-actions"><button data-save-task="${i}">留到以后</button><button data-hide-task="${i}">暂不适合</button></div></div></article>`).join('');
-    ai.querySelectorAll('[data-hide-task]').forEach(b=>b.onclick=()=>{suggestions.splice(Number(b.dataset.hideTask),1);renderTasks();});
-    ai.querySelectorAll('[data-save-task]').forEach(b=>b.onclick=()=>{const p=suggestions[Number(b.dataset.saveTask)],next=current();next.tasks ||= [];if(!next.tasks.some(t=>t.title===p.title&&t.detail===p.detail))next.tasks.unshift({...p,id:uid(),date:new Date().toISOString(),status:'saved'});if(commit(next))toast('提案已保存，换一批也不会丢失。');});
-    const tasks=(state.tasks||[]).filter(t=>t.status!=='dismissed');
-    $('#saved-tasks').innerHTML=tasks.length?'<h2>留给自己的可能</h2>'+tasks.map(t=>`<article class="entry"><div><span class="card-tag">${{saved:'留到以后',trying:'想试试',done:'已经体验'}[t.status]}</span><h3>${esc(t.title)}</h3><p class="task-detail">${esc(t.detail)}</p></div><div class="entry-actions">${t.status==='saved'?`<button data-task-status="trying" data-id="${t.id}">想试试</button>`:''}${t.status!=='done'?`<button data-task-status="done" data-id="${t.id}">已经体验</button>`:''}<button data-task-memory="${t.id}">记录经历</button><button data-task-status="dismissed" data-id="${t.id}">不再计划</button></div></article>`).join(''):'';
-    ai.querySelectorAll('[data-task-status]').forEach(b=>b.onclick=()=>{const next=current();next.tasks.find(t=>t.id===b.dataset.id).status=b.dataset.taskStatus;commit(next);});
-    ai.querySelectorAll('[data-task-memory]').forEach(b=>b.onclick=()=>{const t=state.tasks.find(t=>t.id===b.dataset.taskMemory);memoryForm(t.title,t.id);});
+    const config=aiConfig(), count=core.context(state,'').journals.length;
+    $('#ai-disclosure').textContent=config.endpoint&&config.apiKey?`点击生成会向 ${new URL(config.endpoint).origin}（${config.model||'已配置模型'}）发送上面的想法，以及最近 30 天内允许使用的最多 6 条记录（当前 ${count} 条，每条最多 1500 字）。`:'AI 服务尚未配置。精选提案仍可浏览；你的记录不会因此发送给外部服务。';
+    $('#ai-suggestions').innerHTML=suggestions.map((p,i)=>`<article class="card"><div class="card-body"><span class="card-tag">AI 生活提案 · 可自由调整</span><h3>${esc(p.title)}</h3><p>${esc(p.reason)}</p><p class="task-detail">${esc(p.detail)}</p><div class="modal-actions"><button data-save-task="${i}">留到以后</button><button data-hide-task="${i}">略过</button><button data-try-task="${i}">我试过了</button></div></div></article>`).join('');
+    ai.querySelectorAll('[data-hide-task]').forEach(b=>b.onclick=()=>{suggestions.splice(Number(b.dataset.hideTask),1);storeProposals();renderTasks();});
+    ai.querySelectorAll('[data-save-task]').forEach(b=>b.onclick=()=>{const p=suggestions[Number(b.dataset.saveTask)];if(commit(EarthExperience.collect(current(),p,uid(),new Date().toISOString())))toast('已放进我的期待。');});
+    ai.querySelectorAll('[data-try-task]').forEach(b=>b.onclick=()=>{const p=suggestions[Number(b.dataset.tryTask)],next=current();next.tasks ||= [];let t=next.tasks.find(t=>t.title===p.title&&t.detail===p.detail);if(!t){t={...p,id:uid(),date:new Date().toISOString(),status:'done'};next.tasks.unshift(t);}if(commit(EarthExperience.tried(next,{id:t.id,title:t.title,source:t.id},today())))toast('已留下足迹，可在生活足迹中撤销。');});
+    $('#saved-tasks').innerHTML='';
   }
-  $('#ai-settings').onclick=()=>modal('<h2>AI 连接</h2><p>平台服务配置完成后，可在协会主动生成推荐。日记保存时不会调用 AI。</p><p>用户自配 API 的页面将在后续加入。请不要把密钥写进日记或聊天。</p>');
+  $('#ai-settings').onclick=()=>{
+    const config=aiConfig(), owner=scope();
+    modal('<h2>连接自己的 AI</h2><p>密钥只保存在当前浏览器，不随账号同步，也不包含在备份中。共用设备请在使用后清除。</p><form id="ai-form"><label>服务地址<input id="ai-url" type="url" required></label><label>模型名称<input id="ai-model" required maxlength="120"></label><label>API Key<input id="ai-secret" type="password" autocomplete="off" required maxlength="4096"></label><p class="footnote">请求会直接发给所填地址，请仅使用你信任的服务。测试仅发送一句测试文本，不发送日记；可能产生少量 API 费用。</p><div class="modal-actions"><button class="primary" type="submit">保存到本机</button><button type="button" id="test-ai">测试连接</button><button type="button" id="clear-ai">清除配置</button></div><p role="status" id="ai-config-status"></p></form>');
+    $('#ai-url').value=config.endpoint;$('#ai-model').value=config.model;$('#ai-secret').value=config.apiKey;
+    const read=()=>client.normalize({endpoint:$('#ai-url').value,model:$('#ai-model').value,apiKey:$('#ai-secret').value});
+    $('#ai-form').onsubmit=e=>{e.preventDefault();if(scope()!==owner)return;try{const c=read();localStorage.setItem(aiKey(),JSON.stringify(c));cancelAI();renderTasks();$('#modal').close();$('#ai-status').textContent='AI 配置已保存到本机。现在可以填写想法，点击“更新生活提案”。';toast('AI 配置已保存到本机');}catch(e){$('#ai-config-status').textContent=e.message==='CONFIG'?client.error(e):'未能保存，请检查配置及浏览器存储权限。';}};
+    $('#clear-ai').onclick=()=>{if(scope()!==owner)return;try{localStorage.removeItem(aiKey());cancelAI();$('#ai-secret').value='';renderTasks();$('#ai-config-status').textContent='本机配置已清除。';}catch{$('#ai-config-status').textContent='清除未完成，请重试。';}};
+    $('#test-ai').onclick=async e=>{
+      const output=$('#ai-config-status'),button=e.target, controller=new AbortController();
+      button.disabled=true;output.textContent='正在测试，不发送日记…';const timer=setTimeout(()=>controller.abort(),30000);
+      try{await client.request(read(),null,{test:true,signal:controller.signal});if(scope()===owner)output.textContent='连接成功。尚未保存的配置请点击“保存到本机”。';}catch(e){if(scope()===owner)output.textContent=client.error(e);}finally{clearTimeout(timer);button.disabled=false;}
+    };
+  };
   $('#generate-tasks').onclick=async()=>{
-    const config=window.EARTH_AI||{},status=$('#ai-status');
-    if(!config.endpoint||!config.provider){status.textContent='还未配置真实 AI 服务。下面是编辑精选提案，不是 AI 分析结果。';return;}
-    let url;try{url=new URL(config.endpoint,location.origin);if(url.origin!==location.origin)throw Error();}catch{status.textContent='AI 接口配置无效，请检查同站点服务配置。';return;}
-    const owner=scope(),request=++requestId,body=core.context(state,$('#club-intent').value),controller=new AbortController();
-    const timeout=setTimeout(()=>controller.abort(),25000);$('#generate-tasks').disabled=true;status.textContent='正在寻找一些适合此刻的可能…';
+    const config=aiConfig(),status=$('#ai-status');
+    if(!config.apiKey){status.textContent='请先打开“AI 连接”，填写自己的服务地址、模型和密钥。';return;}
+    const owner=scope(),request=++requestId,body=core.context(state,$('#club-intent').value),controller=new AbortController();aiController=controller;
+    const timeout=setTimeout(()=>controller.abort(),45000);$('#generate-tasks').disabled=true;status.textContent='正在寻找一些适合此刻的可能…';
     try{
-      const response=await fetch(url,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:controller.signal});
-      if(!response.ok)throw Error();const data=await response.json(),items=core.recommendations(data.recommendations);
+      const data=await client.request(config,{...body,editorialCandidates:window.EarthEditorialContext?.()||[]},{signal:controller.signal}),items=core.recommendations(data.recommendations);
       if(scope()!==owner||request!==requestId||!WorldCore.equal(body,core.context(state,body.intent)))return;
-      suggestions=items;renderTasks();status.textContent='不合适就略过，也可以换个想法再试。';
-    }catch{if(scope()===owner&&request===requestId)status.textContent='这次没能生成，请稍后再试。记录和已保存任务没有改变。';}
+      suggestions=items;storeProposals();renderTasks();status.textContent='不合适就略过，也可以换个想法再试。';
+    }catch(e){if(scope()===owner&&request===requestId)status.textContent=client.error(e);}
     finally{clearTimeout(timeout);$('#generate-tasks').disabled=false;}
   };
-  window.addEventListener('earth-world-loaded',()=>{if(scope()!==activeScope){activeScope=scope();requestId++;suggestions=[];restoreDraft();$('#club-intent').value='';$('#ai-status').textContent='';}renderRecords();renderTasks();});
-  restoreDraft();renderRecords();renderTasks();if(location.hash==='#journal')go('journal');
+  window.addEventListener('storage',e=>{if(e.key===aiKey()){cancelAI();renderTasks();}if(e.key===proposalKey()){restoreProposals();renderTasks();}});
+  window.addEventListener('earth-world-loaded',()=>{if(scope()!==activeScope){activeScope=scope();cancelAI();restoreProposals();if($('#ai-form'))$('#modal').close();restoreDraft();$('#club-intent').value='';$('#ai-status').textContent='';}renderRecords();renderTasks();});
+  restoreProposals();restoreDraft();renderRecords();renderTasks();if(location.hash==='#journal')go('journal');
 })();

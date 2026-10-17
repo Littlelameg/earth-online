@@ -31,3 +31,26 @@ PL/pgSQL IF 条件中的 CASE 表达式需加括号，第一次事务测试返�
 - 自配 API 页面与主动邀请按需求后置。
 
 云端兼容迁移已提交成功（控制台执行成功，影响0行）；没有改写现有用户记录。
+
+## 发布验收补充
+- Cloudflare Pages production 上传 earth-online-journal-v1.zip（12 个文件），页面明确显示 Success。
+- 正式域名 https://earth.lme.one/ 刷新后显示新版随手记入口、日期、默认未勾选的 AI 授权和备份恢复入口。
+- 当前正式站浏览器显示“云端暂未连接 · 本机记录保留”，真实邮箱登录后的同步与跨设备验收仍未完成。浏览器 error/warn 日志未返回诊断信息。
+- AI 服务商、模型和生产后端路由尚未配置，未调用真实模型。
+- Sites source workflow 已生成本地提交 5e3ffb9，但准备步骤报错；未确认远程归档/推送成功。Cloudflare 发布独立完成。
+
+
+## 本机自配 API 增量
+- 新增 ai-client.js 与 AI 连接表单，直连兼容接口；取消旧的同源平台接口依赖。
+- 默认地址与模型核对 https://api-docs.deepseek.com/ （2026-10-16），当前文档提供 deepseek-flash；支持用户修改。agent-reach Jina 抓取未完成，以官方页面读取结果为依据。
+- 保存本机设置不发送网络请求；测试发送固定文本；不使用平台代理，不上传密钥到 CloudBase，不导出密钥。
+- npm test 31/31；npm run build 成功。假密钥仅用于本地 UI 验证保存、刷新后遮蔽显示和清除，未发送到服务商。
+- 真实密钥、真实生成及服务商 CORS 仍待用户配置后验证。
+- DeepSeek OPTIONS 跨域预检返回 200，明确允许 Origin https://earth.lme.one、POST、authorization/content-type；未携带任何真实密钥或记录。
+- Cloudflare production 上传13个文件后显示 Success。正式域名 earth.lme.one/#club 已确认显示“连接自己的 AI”、DeepSeek默认地址、模型、密钥输入以及保存/测试/清除按钮。
+- 当前增量上线，真实账户模型调用仍待用户在页面配置后验收；此前 CloudBase 连接问题不属于已修复项。
+
+## API 保存反馈修复
+- 用户反馈保存无反应；只读取页面状态文本，确认已有“已保存在当前浏览器”成功提示，未读取密钥。
+- 改为保存成功关闭弹窗、显示 toast 与协会状态引导。不触发模型调用。
+- 本地以假密钥实测 dialogVisible=false，协会状态显示配置已保存；随后清除测试配置。node --check 通过。

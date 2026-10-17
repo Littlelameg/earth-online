@@ -13,12 +13,12 @@ function renderSuggestions(){
 }
 function traceFor(source){return traceNames[source]||traceNames.other;}
 function readTrace(source){
-  const moments=state.memories.filter(m=>(traceNames[m.source]?m.source:'other')===source);
+  const moments=state.memories.filter(m=>!String(m.source||'').startsWith('foot:')&&(traceNames[m.source]?m.source:'other')===source);
   modal(`<p class="eyebrow">这里藏着你的生活</p><h2>${traceFor(source)}</h2><p>物件会留下，日子也会。</p><div class="trace-moments">${moments.map(m=>`<article><span class="card-tag">${esc(m.date||'某一天')}</span><h3>${esc(m.title)}</h3><p>${esc(m.note||'那天的心情，不写下来也属于你。')}</p></article>`).join('')}</div>`);
 }
 function renderJourney(){
   if(!$('#mood-picker'))return;
-  const groups=[...new Set(state.memories.map(m=>traceNames[m.source]?m.source:'other'))];
+  const groups=[...new Set(state.memories.filter(m=>!String(m.source||'').startsWith('foot:')).map(m=>traceNames[m.source]?m.source:'other'))];
   $('#trace-list').innerHTML=groups.length?groups.map(s=>`<button class="trace-chip" data-trace="${s}">✧ ${traceFor(s)} <span>翻开回忆 ↗</span></button>`).join(''):'<p class="muted">这里还没有故事。等生活发生，再慢慢留下。</p>';
   $('#trace-list').querySelectorAll('[data-trace]').forEach(b=>b.onclick=()=>readTrace(b.dataset.trace));
   const positions={walk:[25,67],food:[47,70],draw:[34,52],plant:[53,57],letter:[56,56],sound:[41,50],other:[42,76]};

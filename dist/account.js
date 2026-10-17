@@ -41,14 +41,21 @@
   async function checkedWorld(data,id){
     const active=await cloud.session();
     if(!active||String(active.user.id)!==id)throw Error('ACCOUNT_CHANGED');
-    return cloud.world(data);
+    const result=await cloud.world(data);
+    const after=await cloud.session();if(!after||String(after.user.id)!==id)throw Error('ACCOUNT_CHANGED');
+    return result;
   }
   async function activate(next){
     if(!next?.user?.id)throw Error('SESSION_MISSING');
     activating=true;
     try{
-      const id=String(next.user.id), remote=await checkedWorld({action:'read'},id);
-      const cached=read(cacheKey(id),null);
+      const id=String(next.user.id),cached=read(cacheKey(id),null);let remote;
+      try{remote=await checkedWorld({action:'read'},id);}catch(e){
+        const active=await cloud.session();
+        if(e.message==='ACCOUNT_CHANGED'||!active||String(active.user.id)!==id||!cached)throw e;
+        const candidate={id,world:Core.validate(cached.world),base:Core.validate(cached.base),revision:cached.revision};
+        session=next;account=candidate;emit(candidate.world);setStatus('本机记录已打开 · 尚未连接云端');return;
+      }
       const world=cached?Core.merge(cached.base,cached.world,remote.world):Core.validate(remote.world);
       const candidate={id,world,base:remote.world,revision:remote.revision};
       write(cacheKey(id),candidate);
@@ -78,7 +85,7 @@
         remote=result;
       }
       setStatus('本机已保存 · 点击重试同步');return false;
-    }catch(e){setStatus('本机已保存 · 尚未同步');notify(errorText(e));return false;}
+    }catch(e){if(account?.id===id){setStatus('本机已保存 · 尚未同步');notify(errorText(e));}return false;}
     finally{syncing=false;}
   }
   function save(world){
@@ -86,9 +93,25 @@
     if(account){
       const disk=read(cacheKey(account.id),account);
       const next={...disk,world:Core.merge(account.world,world,disk.world)};
-      write(cacheKey(account.id),next);account=next;emit(next.world);setStatus('本机已保存 · 等待同步');void sync();
+      retainRemoved(account.id,disk.world,next.world);write(cacheKey(account.id),next);account=next;emit(next.world);setStatus('本机已保存 · 等待同步');void sync();
     }
-    else {const merged=Core.merge(guestBase,world,guest());write(guestKey,merged);guestBase=Core.clone(merged);emit(merged);setStatus('记录保存在此浏览器');}
+    else {const previous=guest(),merged=Core.merge(guestBase,world,previous);retainRemoved('guest',previous,merged);write(guestKey,merged);guestBase=Core.clone(merged);emit(merged);setStatus('记录保存在此浏览器');}
+  }
+  const recoveryKey=id=>'earth-recovery-v1:'+encodeURIComponent(id);
+  function retainRemoved(id,before,after){
+    if(!window.EarthRecoveryCore)return;
+    const entries=window.EarthRecoveryCore.removed(before,after);if(!entries.length)return;
+    const previous=read(recoveryKey(id),[]);
+    if(!Array.isArray(previous))throw Error('RECOVERY_UNAVAILABLE');
+    const additions=entries.map((e,i)=>({...e,id:Date.now().toString(36)+'_'+i+'_'+Math.random().toString(36).slice(2),removedAt:new Date().toISOString()}));
+    write(recoveryKey(id),[...additions,...previous]);
+  }
+  function recovery(){const list=read(recoveryKey(account?.id||'guest'),[]);if(!Array.isArray(list))throw Error('RECOVERY_UNAVAILABLE');return Core.clone(list);}
+  function restoreRemoved(id){
+    const owner=account?.id||'guest',list=recovery(),entry=list.find(e=>e.id===id);if(!entry)throw Error('RECOVERY_MISSING');
+    const next=window.EarthRecoveryCore.restore(account?account.world:guest(),entry,Core);save(next);
+    // Retain the recovery copy: storage or sync failure must not destroy the only original.
+    return true;
   }
   function exportWorld(){
     const world=account?account.world:guest();
@@ -147,7 +170,7 @@
     };
     document.querySelector('#change-email').onclick=()=>{verifier=null;panel();};
   }
-  window.EarthAccount={save,updateStatus,panel,exportWorld,scope:()=>account?.id||'guest',current:()=>Core.clone(account?account.world:guest())};
+  window.EarthAccount={save,recovery,restoreRemoved,updateStatus,panel,exportWorld,scope:()=>account?.id||'guest',current:()=>Core.clone(account?account.world:guest())};
   document.querySelector('#account-button').onclick=async()=>{
     if(config?.env&&config.enabled!==false&&!session){try{await ensureCloud();const existing=await cloud.session();if(existing)await activate(existing);}catch(e){notify(errorText(e));}}
     panel();
