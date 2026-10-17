@@ -2,6 +2,10 @@
 
 交付：`release/earth-online-0.1.0.apk`，包名 `one.lme.earth`，Android 8.0 及以上。
 
+公开下载：[Android 0.1.0 测试版](https://github.com/Littlelameg/earth-online/releases/tag/android-v0.1.0)（包含 APK 和 SHA-256 校验文件）。
+
+示例网站：[地球 Online](https://earth.lme.one/)。
+
 ## 使用
 
 把 APK 发到 Android 手机，打开文件并按系统提示允许本次使用的文件管理器安装应用。安装后点击「地球 Online」图标即可进入现有正式站。

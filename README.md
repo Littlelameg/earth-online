@@ -4,6 +4,14 @@
 
 **早期开发版本 · 原生 HTML / CSS / JavaScript · MIT 开源**
 
+## 在线体验与下载
+
+**[🌏 打开示例网站](https://earth.lme.one/)** · **[📱 下载 Android APK](https://github.com/Littlelameg/earth-online/releases/download/android-v0.1.0/earth-online-0.1.0.apk)** · **[发布说明与校验值](https://github.com/Littlelameg/earth-online/releases/tag/android-v0.1.0)**
+
+Android 测试版 **0.1.0** 支持 **Android 8.0 及以上**。下载安装包后，按系统提示允许本次安装来源。应用通过 WebView 打开示例网站，需要网络；网页内容会随网站更新，并非固定在本仓库某个提交。浏览器里的本地记录和 AI 配置不会自动迁移到应用中。
+
+APK 已通过签名校验，尚未完成真机安装、登录同步和导出的完整验收。安装包发布在 GitHub Releases，签名私钥不公开。示例站与自行部署版本使用各自的数据环境；开源不代表公开用户记录。
+
 ## 能做什么
 
 - 自由写下日记、备忘和愿望，搜索、编辑与回看记录。
@@ -49,7 +57,7 @@ python -m http.server 8080 --directory dist --bind 127.0.0.1
 | `server/` | 可选 AI 服务端适配器 |
 | `android-app/` | Android 包装应用源码与构建说明 |
 
-Android 源码目前默认打开原项目站点；自建时需调整 `MainActivity.java` 中的站点配置。SDK、签名私钥、密码和 APK 不随源码分发，构建前需按 [Android 说明](android-app/README.md) 准备工具。尚未完成真机完整验收。
+Android 源码目前默认打开原项目站点；自建时需调整 `MainActivity.java` 中的站点配置。SDK、签名私钥和密码不随源码分发；APK 通过 Releases 单独提供。构建前需按 [Android 说明](android-app/README.md) 准备工具。尚未完成真机完整验收。
 
 ## 开发与贡献
 
